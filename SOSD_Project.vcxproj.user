@@ -1,0 +1,8 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LocalDebuggerCommandArguments>C:\Users\User\OneDrive\Desktop\실\SOSD\SOSD-master\data\uniform_sparse_1K_uint32</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArgumentsHistory>"C:\Users\User\OneDrive\Desktop\SOSD\SOSD-master\data\uniform_dense_1K_uint32"|C:\Users\User\OneDrive\Desktop\실\SOSD\SOSD-master\data\uniform_sparse_1K_uint32|</LocalDebuggerCommandArgumentsHistory>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,205 @@
+﻿#include "FileMappedData.h"
+#include "JobMemoryLimit.h"
+#include "QueryGenerator.h"
+#include "Benchmark.h"
+
+#include <Windows.h>
+#include <iostream>
+#include <string>
+#include <exception>
+
+static std::wstring ToWide(const char* s) {
+    if (!s) {
+        return L"";
+    }
+
+    int n = MultiByteToWideChar(
+        CP_ACP,
+        0,
+        s,
+        -1,
+        nullptr,
+        0
+    );
+
+    if (n <= 0) {
+        return L"";
+    }
+
+   
+    std::wstring result(n, L'\0');
+
+    MultiByteToWideChar(
+        CP_ACP,
+        0,
+        s,
+        -1,
+        result.data(),
+        n
+    );
+
+    result.resize(n - 1);
+
+    return result;
+}
+
+static std::string ToUtf8(const std::wstring& s) {
+    if (s.empty()) {
+        return "";
+    }
+
+    int n = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        s.c_str(),
+        -1,
+        nullptr,
+        0,
+        nullptr,
+        nullptr
+    );
+
+    if (n <= 0) {
+        return "";
+    }
+
+    std::string result(n, '\0');
+
+    WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        s.c_str(),
+        -1,
+        result.data(),
+        n,
+        nullptr,
+        nullptr
+    );
+
+    result.resize(n - 1);
+
+    return result;
+}
+
+int main(int argc, char* argv[]) {
+
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+    std::ios::sync_with_stdio(false);
+    std::cout << "한글 출력 테스트\n";
+
+    // 1. 메모리 제한 설정
+    JobMemoryLimit memoryLimit;
+
+    std::wstring error;
+
+    constexpr size_t LimitBytes =
+        512ull * 1024ull * 1024ull;
+
+    if (!memoryLimit.Apply(LimitBytes, error)) {
+        std::wcerr
+            << L"메모리 제한 설정 실패: "
+            << error
+            << L'\n';
+
+        return 1;
+    }
+
+    std::cout << "512MB memory limit applied.\n";
+
+    // 2. 데이터 파일 경로 확인
+    std::cout << "Argument count: " << argc << '\n';
+
+    if (argc >= 2) {
+        std::cout << "Dataset path: " << argv[1] << '\n';
+    }
+
+    if (argc < 2) {
+        std::cout
+            << "사용법: SOSD_Project.exe <dataset_path>\n";
+
+        return 1;
+    }
+
+    // 3. File Mapping으로 데이터셋 열기
+    std::cout << "Opening dataset...\n";
+
+    FileMappedData dataset;
+
+    if (!dataset.Open(ToWide(argv[1]), error)) {
+        std::cerr
+            << "데이터 열기 실패: "
+            << ToUtf8(error)
+            << '\n';
+
+        return 1;
+    }
+
+    if (dataset.Size() > static_cast<uint64_t>(SIZE_MAX)) {
+        std::cerr
+            << "현재 플랫폼에서 처리할 수 없는 데이터 크기입니다.\n";
+
+        return 1;
+    }
+
+    const uint32_t* data = dataset.Data();
+
+    const size_t dataSize =
+        static_cast<size_t>(dataset.Size());
+
+    std::cout
+        << "Dataset loaded through file mapping.\n";
+
+    std::cout
+        << "Key count: "
+        << dataSize
+        << '\n';
+
+    std::cout
+        << "File size: "
+        << dataset.FileSize()
+        << " bytes\n";
+
+    // 4. 성공 및 실패 쿼리 생성
+    constexpr size_t QueryCount = 10000;
+
+    QuerySet queries;
+
+    try {
+        queries = QueryGenerator::Generate(
+            data,
+            dataSize,
+            QueryCount
+        );
+    }
+    catch (const std::exception& e) {
+        std::cerr
+            << "쿼리 생성 실패: "
+            << e.what()
+            << '\n';
+
+        return 1;
+    }
+
+    std::cout
+        << "Successful queries: "
+        << queries.successful.size()
+        << '\n';
+
+    std::cout
+        << "Unsuccessful queries: "
+        << queries.unsuccessful.size()
+        << '\n';
+
+    // 5. 팀원 알고리즘 연결 위치
+    // B-tree와 FAST 코드를 받은 후 여기에 연결합니다.
+
+    std::cout
+        << "\n알고리즘 연결 전 템플릿 실행이 완료되었습니다.\n";
+
+    std::cout
+        << "팀원 알고리즘을 SearchIndex 인터페이스에 맞춰 연결하세요.\n";
+
+    return 0;
+}

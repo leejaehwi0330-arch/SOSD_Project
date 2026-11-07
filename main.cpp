@@ -4,9 +4,38 @@
 #include "Benchmark.h"
 
 #include <Windows.h>
+#include <Psapi.h>
 #include <iostream>
 #include <string>
 #include <exception>
+
+#pragma comment(lib, "Psapi.lib")
+using namespace std;
+
+void PrintMemoryUsage()
+{
+    PROCESS_MEMORY_COUNTERS_EX pmc{};
+
+    if (GetProcessMemoryInfo(
+        GetCurrentProcess(),
+        reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc),
+        sizeof(pmc)))
+    {
+        double privateMB =
+            pmc.PrivateUsage / (1024.0 * 1024.0);
+
+        double workingSetMB =
+            pmc.WorkingSetSize / (1024.0 * 1024.0);
+
+        cout << "\n===== Memory Usage =====\n";
+        cout << "Private Usage: " << privateMB << " MB\n";
+        cout << "Working Set: " << workingSetMB << " MB\n";
+    }
+    else
+    {
+        cout << "메모리 사용량 확인 실패\n";
+    }
+}
 
 static std::wstring ToWide(const char* s) {
     if (!s) {
@@ -196,7 +225,9 @@ int main(int argc, char* argv[]) {
     // B-tree와 FAST 코드를 받은 후 여기에 연결합니다.
 
     std::cout
-        << "\n알고리즘 연결 전 템플릿 실행이 완료되었습니다.\n";
+        << "\n알고리즘 연결 전 템플릿 실행이 완료되었습니다.\n\n";
+
+    PrintMemoryUsage();
 
     std::cout
         << "팀원 알고리즘을 SearchIndex 인터페이스에 맞춰 연결하세요.\n";

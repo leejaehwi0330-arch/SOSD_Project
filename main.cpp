@@ -21,15 +21,18 @@ void PrintMemoryUsage()
         reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&pmc),
         sizeof(pmc)))
     {
-        double privateMB =
+        double currentMB =
             pmc.PrivateUsage / (1024.0 * 1024.0);
 
-        double workingSetMB =
-            pmc.WorkingSetSize / (1024.0 * 1024.0);
+        double peakMB =
+            pmc.PeakPagefileUsage / (1024.0 * 1024.0);
 
         cout << "\n===== Memory Usage =====\n";
-        cout << "Private Usage: " << privateMB << " MB\n";
-        cout << "Working Set: " << workingSetMB << " MB\n";
+        cout << "Memory Limit: 512 MB\n";
+        cout << "Current Private Usage: "
+            << currentMB << " MB\n";
+        cout << "Peak Private Usage: "
+            << peakMB << " MB\n";
     }
     else
     {

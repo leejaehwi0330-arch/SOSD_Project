@@ -3,6 +3,9 @@
 #include <chrono>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
+#include <algorithm>
+using namespace std;
 
 BenchmarkResult Benchmark::Run(
     SearchIndex& index,
@@ -40,7 +43,9 @@ BenchmarkResult Benchmark::Run(
     // 성공 쿼리 정확성 검사
     r.successCorrect = true;
 
-    for (uint32_t key : queries.successful) {
+    for (size_t i = 0; i < queries.successful.size(); ++i) {
+        uint32_t key = queries.successful[i];
+
         int64_t pos = index.Search(key);
 
         if (
@@ -49,6 +54,16 @@ BenchmarkResult Benchmark::Run(
             data[pos] != key
             ) {
             r.successCorrect = false;
+
+            int64_t expected =
+                std::lower_bound(data, data + dataSize, key) - data;
+
+            cout << "\n[Success Query Error]\n";
+            cout << "Query Index: " << i << '\n';
+            cout << "Key: " << key << '\n';
+            cout << "Expected: " << expected << '\n';
+            cout << "Actual: " << pos << '\n';
+
             break;
         }
     }
@@ -56,9 +71,20 @@ BenchmarkResult Benchmark::Run(
     // 실패 쿼리 정확성 검사
     r.failureCorrect = true;
 
-    for (uint32_t key : queries.unsuccessful) {
-        if (index.Search(key) != -1) {
+    for (size_t i = 0; i < queries.unsuccessful.size(); ++i) {
+        uint32_t key = queries.unsuccessful[i];
+
+        int64_t actual = index.Search(key);
+
+        if (actual != -1) {
             r.failureCorrect = false;
+
+            cout << "\n[Failure Query Error]\n";
+            cout << "Query Index: " << i << '\n';
+            cout << "Key: " << key << '\n';
+            cout << "Expected: -1\n";
+            cout << "Actual: " << actual << '\n';
+
             break;
         }
     }

@@ -2,6 +2,7 @@
 #include "JobMemoryLimit.h"
 #include "QueryGenerator.h"
 #include "Benchmark.h"
+#include "BTree.h"
 
 #include <Windows.h>
 #include <Psapi.h>
@@ -12,7 +13,7 @@
 #pragma comment(lib, "Psapi.lib")
 using namespace std;
 
-void PrintMemoryUsage()
+void PrintMemoryUsage(const JobMemoryLimit& memoryLimit)
 {
     PROCESS_MEMORY_COUNTERS_EX pmc{};
 
@@ -24,15 +25,26 @@ void PrintMemoryUsage()
         double currentMB =
             pmc.PrivateUsage / (1024.0 * 1024.0);
 
-        double peakMB =
-            pmc.PeakPagefileUsage / (1024.0 * 1024.0);
-
         cout << "\n===== Memory Usage =====\n";
         cout << "Memory Limit: 512 MB\n";
+
         cout << "Current Private Usage: "
             << currentMB << " MB\n";
-        cout << "Peak Private Usage: "
-            << peakMB << " MB\n";
+
+        size_t peakBytes = 0;
+
+        if (memoryLimit.GetPeakProcessMemoryUsage(peakBytes))
+        {
+            double peakMB =
+                peakBytes / (1024.0 * 1024.0);
+
+            cout << "Peak Process Memory Usage: "
+                << peakMB << " MB\n";
+        }
+        else
+        {
+            cout << "Peak Process Memory Usage: 확인 실패\n";
+        }
     }
     else
     {
@@ -227,13 +239,37 @@ int main(int argc, char* argv[]) {
     // 5. 팀원 알고리즘 연결 위치
     // B-tree와 FAST 코드를 받은 후 여기에 연결합니다.
 
-    std::cout
-        << "\n알고리즘 연결 전 템플릿 실행이 완료되었습니다.\n\n";
+    // BTree 벤치마크 실행
+    BTree btree;
 
-    PrintMemoryUsage();
+    BenchmarkResult btreeResult =
+        Benchmark::Run(
+            btree,
+            data,
+            dataSize,
+            queries
+        );
 
-    std::cout
-        << "팀원 알고리즘을 SearchIndex 인터페이스에 맞춰 연결하세요.\n";
+    // 결과 출력
+    std::cout << "\n===== BTree 벤치마크 결과 =====\n";
+
+    std::cout << "알고리즘: " << btreeResult.algorithm << '\n';
+    std::cout << "Build 시간: " << btreeResult.buildMs << " ms\n";
+    std::cout << "성공 탐색 시간: "
+        << btreeResult.successNsPerQuery << " ns/query\n";
+    std::cout << "실패 탐색 시간: "
+        << btreeResult.failureNsPerQuery << " ns/query\n";
+
+    std::cout << "인덱스 메모리: "
+        << btreeResult.indexBytes << " bytes\n";
+
+    std::cout << "성공 쿼리 정확성: "
+        << (btreeResult.successCorrect ? "통과" : "실패") << '\n';
+
+    std::cout << "실패 쿼리 정확성: "
+        << (btreeResult.failureCorrect ? "통과" : "실패") << '\n';
+
+    PrintMemoryUsage(memoryLimit);
 
     return 0;
 }

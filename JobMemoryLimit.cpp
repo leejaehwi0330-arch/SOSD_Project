@@ -48,3 +48,26 @@ bool JobMemoryLimit::Apply(
 
     return true;
 }
+
+bool JobMemoryLimit::GetPeakProcessMemoryUsage(size_t& bytes) const
+{
+    if (!job_) {
+        return false;
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info{};
+
+    if (!QueryInformationJobObject(
+        job_,
+        JobObjectExtendedLimitInformation,
+        &info,
+        sizeof(info),
+        nullptr))
+    {
+        return false;
+    }
+
+    bytes = static_cast<size_t>(info.PeakProcessMemoryUsed);
+
+    return true;
+}

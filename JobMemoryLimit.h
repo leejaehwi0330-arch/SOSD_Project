@@ -8,6 +8,8 @@ class JobMemoryLimit {
 public:
     ~JobMemoryLimit();
 
+    bool GetPeakProcessMemoryUsage(size_t& bytes) const;
+
     bool Apply(
         size_t limitBytes,
         std::wstring& error

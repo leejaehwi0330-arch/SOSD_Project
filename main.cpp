@@ -3,6 +3,7 @@
 #include "QueryGenerator.h"
 #include "Benchmark.h"
 #include "BTree.h"
+#include "FAST.h"
 
 #include <Windows.h>
 #include <Psapi.h>
@@ -129,9 +130,22 @@ int main(int argc, char* argv[]) {
 
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
-
     std::ios::sync_with_stdio(false);
+
     std::cout << "한글 출력 테스트\n";
+
+    int choice;
+
+    cout << "\n===== SOSD 검색 알고리즘 선택 =====\n";
+    cout << "1. BTree\n";
+    cout << "2. FAST\n";
+    cout << "번호 입력: ";
+    cin >> choice;
+
+    if (choice != 1 && choice != 2) {
+        cout << "잘못된 번호입니다.\n";
+        return 1;
+    }
 
     // 1. 메모리 제한 설정
     JobMemoryLimit memoryLimit;
@@ -236,40 +250,43 @@ int main(int argc, char* argv[]) {
         << queries.unsuccessful.size()
         << '\n';
 
-    // 5. 팀원 알고리즘 연결 위치
-    // B-tree와 FAST 코드를 받은 후 여기에 연결합니다.
+    // 5. BTree, FAST 측정
+    if (choice == 1) {
+        BTree btree;
 
-    // BTree 벤치마크 실행
-    BTree btree;
+        BenchmarkResult result =
+            Benchmark::Run(btree, data, dataSize, queries);
 
-    BenchmarkResult btreeResult =
-        Benchmark::Run(
-            btree,
-            data,
-            dataSize,
-            queries
-        );
+        cout << "\n===== BTree 벤치마크 결과 =====\n";
+        cout << "알고리즘: BTree\n";
+        cout << "Build 시간: " << result.buildMs << " ms\n";
+        cout << "성공 탐색 시간: " << result.successNsPerQuery << " ns/query\n";
+        cout << "실패 탐색 시간: " << result.failureNsPerQuery << " ns/query\n";
+        cout << "인덱스 메모리: " << result.indexBytes << " bytes\n";
+        cout << "성공 쿼리 정확성: " << (result.successCorrect ? "통과" : "실패") << '\n';
+        cout << "실패 쿼리 정확성: " << (result.failureCorrect ? "통과" : "실패") << '\n';
 
-    // 결과 출력
-    std::cout << "\n===== BTree 벤치마크 결과 =====\n";
+        Benchmark::AppendCsv("benchmark_results.csv", argv[1], result);
+        PrintMemoryUsage(memoryLimit);
+    }
+    else if (choice == 2) {
+        FAST fast;
 
-    std::cout << "알고리즘: " << btreeResult.algorithm << '\n';
-    std::cout << "Build 시간: " << btreeResult.buildMs << " ms\n";
-    std::cout << "성공 탐색 시간: "
-        << btreeResult.successNsPerQuery << " ns/query\n";
-    std::cout << "실패 탐색 시간: "
-        << btreeResult.failureNsPerQuery << " ns/query\n";
+        BenchmarkResult result =
+            Benchmark::Run(fast, data, dataSize, queries);
 
-    std::cout << "인덱스 메모리: "
-        << btreeResult.indexBytes << " bytes\n";
+        cout << "\n===== FAST 벤치마크 결과 =====\n";
+        cout << "알고리즘: FAST\n";
+        cout << "Build 시간: " << result.buildMs << " ms\n";
+        cout << "성공 탐색 시간: " << result.successNsPerQuery << " ns/query\n";
+        cout << "실패 탐색 시간: " << result.failureNsPerQuery << " ns/query\n";
+        cout << "인덱스 메모리: " << result.indexBytes << " bytes\n";
+        cout << "성공 쿼리 정확성: " << (result.successCorrect ? "통과" : "실패") << '\n';
+        cout << "실패 쿼리 정확성: " << (result.failureCorrect ? "통과" : "실패") << '\n';
 
-    std::cout << "성공 쿼리 정확성: "
-        << (btreeResult.successCorrect ? "통과" : "실패") << '\n';
-
-    std::cout << "실패 쿼리 정확성: "
-        << (btreeResult.failureCorrect ? "통과" : "실패") << '\n';
-
-    PrintMemoryUsage(memoryLimit);
+        Benchmark::AppendCsv("benchmark_results.csv", argv[1], result);
+        PrintMemoryUsage(memoryLimit);
+    }
 
     return 0;
-}
+ }

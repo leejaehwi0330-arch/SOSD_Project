@@ -1,0 +1,5 @@
+Dataset,Algorithm,Build_ms,Success_ns_per_query,Failure_ns_per_query,Index_Memory_bytes,Success_Correct,Failure_Correct
+C:\Users\User\OneDrive\Desktop\실\SOSD_Project_Template\Data\uniform_dense_200M_uint32,BTree,2835.538,1538.600,36.640,17274672,TRUE,TRUE
+C:\Users\User\OneDrive\Desktop\실\SOSD_Project_Template\Data\uniform_dense_200M_uint32,FAST,236.346,625.500,208.990,4177464,TRUE,TRUE
+C:\Users\User\OneDrive\Desktop\실\SOSD_Project_Template\Data\uniform_dense_200M_uint32,FAST,1127.003,1128.450,459.910,4177464,TRUE,TRUE
+C:\Users\User\OneDrive\Desktop\실\SOSD_Project_Template\Data\uniform_dense_200M_uint32,BTree,662.608,1377.260,30.450,17274672,TRUE,TRUE

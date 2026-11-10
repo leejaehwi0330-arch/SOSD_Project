@@ -1,110 +1,359 @@
-﻿#include "FAST.h"
+﻿
+#include "FAST.h"
 
 #include <algorithm>
 #include <climits>
-#include <emmintrin.h> // SSE2: 128비트(32비트 정수 4개) SIMD
+#include <cstdint>
+#include <emmintrin.h>
+#include <limits>
+#include <new>
 #include <utility>
 
-bool FAST::Build(const uint32_t* data, size_t size) {
-    if (size > 0 && data == nullptr) return false;
+namespace {
+    constexpr size_t MemoryLimit =
+        512ull * 1024 * 1024;
+
+    inline size_t FindSimdChild(
+        const uint32_t* threeKeys,
+        __m128i query)
+    {
+        const __m128i sign =
+            _mm_set1_epi32(INT32_MIN);
+
+        const __m128i raw =
+            _mm_loadu_si128(
+                reinterpret_cast<const __m128i*>(threeKeys));
+
+        const __m128i keys =
+            _mm_xor_si128(raw, sign);
+
+        const __m128i comparison =
+            _mm_cmpgt_epi32(query, keys);
+
+        const int bits =
+            _mm_movemask_ps(
+                _mm_castsi128_ps(comparison));
+
+        const size_t right =
+            static_cast<size_t>(bits & 1);
+
+        const size_t child =
+            static_cast<size_t>(
+                (bits >> (right ? 2 : 1)) & 1);
+
+        return right * 2 + child;
+    }
+
+    inline size_t FindCacheChild(
+        const uint32_t* cacheLine,
+        __m128i query)
+    {
+        const size_t top =
+            FindSimdChild(cacheLine, query);
+
+        const size_t bottom =
+            FindSimdChild(
+                cacheLine + 3 + top * 3,
+                query);
+
+        return top * 4 + bottom;
+    }
+}
+
+uint32_t FAST::Pivot(size_t index) const
+{
+    return index < size_
+        ? data_[index]
+        : UINT32_MAX;
+}
+
+void FAST::WriteSimdBlock(
+    uint32_t* dest,
+    size_t begin,
+    size_t span) const
+{
+    const size_t quarter = span / 4;
+
+    dest[0] = Pivot(
+        begin + 2 * quarter - 1);
+
+    dest[1] = Pivot(
+        begin + quarter - 1);
+
+    dest[2] = Pivot(
+        begin + 3 * quarter - 1);
+}
+
+void FAST::WriteCacheLine(
+    uint32_t* dest,
+    size_t begin,
+    size_t span) const
+{
+    WriteSimdBlock(
+        dest,
+        begin,
+        span);
+
+    const size_t quarter = span / 4;
+
+    for (size_t child = 0; child < 4; ++child)
+    {
+        WriteSimdBlock(
+            dest + 3 + child * 3,
+            begin + child * quarter,
+            quarter);
+    }
+
+    dest[15] = UINT32_MAX;
+}
+
+void FAST::WritePageBlock(
+    uint32_t* dest,
+    size_t begin,
+    size_t span) const
+{
+    WriteCacheLine(
+        dest,
+        begin,
+        span);
+
+    const size_t part = span / 16;
+
+    for (size_t child = 0; child < 16; ++child)
+    {
+        WriteCacheLine(
+            dest + (child + 1) * 16,
+            begin + child * part,
+            part);
+    }
+}
+
+uint32_t* FAST::BlockAt(
+    const PageLevel& level,
+    size_t blockIndex)
+{
+    const size_t offset =
+        (blockIndex / BlocksPerPage) * PageBytes
+        + (blockIndex % BlocksPerPage) * BlockBytes;
+
+    return level.aligned
+        + offset / sizeof(uint32_t);
+}
+
+bool FAST::Build(
+    const uint32_t* data,
+    size_t size)
+{
+    pageLevels_.clear();
+
+    data_ = nullptr;
+    size_ = 0;
+    logicalLeaves_ = 0;
+
+    if (size > 0 && data == nullptr)
+    {
+        return false;
+    }
+
+    // 원본 데이터는 제외하고 FAST 인덱스 메모리만 계산한다.
+    size_t memoryNeeded = sizeof(*this);
+
+    size_t leaves = 1;
+
+    while (leaves <= size)
+    {
+        if (leaves >
+            std::numeric_limits<size_t>::max() / 2)
+        {
+            return false;
+        }
+
+        leaves *= 2;
+    }
 
     data_ = data;
     size_ = size;
-    levels_.clear();
+    logicalLeaves_ = leaves;
 
-    // 원본 정렬 배열을 256개씩 나누고 구간별 최댓값을 기록
-    std::vector<uint32_t> childMax;
-    for (size_t begin = 0; begin < size; begin += LeafCapacity) {
-        size_t end = std::min(begin + LeafCapacity, size);
-        childMax.push_back(data[end - 1]);
-    }
+    try
+    {
+        for (size_t span = leaves;
+            span >= (size_t(1) << PageDepth);
+            span /= (size_t(1) << PageDepth))
+        {
+            const size_t count =
+                size / span + (size % span != 0);
 
-    // 16개 구간을 하나의 64바이트 노드로 묶고 루트까지 반복
-    while (childMax.size() > 1) {
-        std::vector<Node> level;
-        std::vector<uint32_t> parentMax;
+            const size_t pages =
+                count / BlocksPerPage
+                + (count % BlocksPerPage != 0);
 
-        for (size_t first = 0; first < childMax.size(); first += Fanout) {
-            size_t last = std::min(first + Fanout, childMax.size());
-
-            Node node{};
-            std::fill(std::begin(node.splitKeys), std::end(node.splitKeys), UINT32_MAX);
-
-            // 마지막 자식의 최댓값은 저장하지 않아도 됨.
-            // key가 앞의 15개 경계보다 크면 마지막 자식을 선택하면 됨.
-            for (size_t i = first; i + 1 < last; ++i) {
-                node.splitKeys[i - first] = childMax[i];
+            if (pages >
+                (std::numeric_limits<size_t>::max()
+                    - (PageBytes - 1)) / PageBytes)
+            {
+                throw std::bad_alloc();
             }
 
-            level.push_back(node);
-            parentMax.push_back(childMax[last - 1]);
-        }
+            const size_t payload =
+                pages * PageBytes;
 
-        levels_.push_back(std::move(level));
-        childMax = std::move(parentMax);
+            const size_t allocated =
+                payload + PageBytes;
+
+            // FAST 인덱스의 추가 메모리만 512MB 기준으로 검사한다.
+            if (memoryNeeded > MemoryLimit ||
+                allocated > MemoryLimit - memoryNeeded ||
+                sizeof(PageLevel) >
+                MemoryLimit - memoryNeeded - allocated)
+            {
+                pageLevels_.clear();
+
+                data_ = nullptr;
+                size_ = 0;
+                logicalLeaves_ = 0;
+
+                return false;
+            }
+
+            memoryNeeded +=
+                allocated + sizeof(PageLevel);
+
+            PageLevel level;
+
+            level.blockCount = count;
+            level.leafSpan = span;
+            level.storageBytes = allocated;
+
+            level.storage.reset(
+                new uint32_t[
+                    allocated / sizeof(uint32_t)]);
+
+            const uintptr_t raw =
+                reinterpret_cast<uintptr_t>(
+                    level.storage.get());
+
+            const uintptr_t aligned =
+                (raw + PageBytes - 1)
+                & ~uintptr_t(PageBytes - 1);
+
+            level.aligned =
+                reinterpret_cast<uint32_t*>(aligned);
+
+            for (size_t block = 0;
+                block < count;
+                ++block)
+            {
+                WritePageBlock(
+                    BlockAt(level, block),
+                    block * span,
+                    span);
+            }
+
+            pageLevels_.push_back(
+                std::move(level));
+        }
+    }
+    catch (const std::bad_alloc&)
+    {
+        pageLevels_.clear();
+
+        data_ = nullptr;
+        size_ = 0;
+        logicalLeaves_ = 0;
+
+        return false;
     }
 
     return true;
 }
 
-// SIMD로 분기 기준값 4개씩 비교하여 다음 자식 번호(0~15)를 찾음
-size_t FAST::FindChild(const Node& node, uint32_t key) {
-    // SSE2는 부호 있는 정수 비교를 지원하므로 최상위 비트를 뒤집어
-    // uint32_t의 대소 관계를 그대로 비교하도록 만듦.
-    const __m128i signBit = _mm_set1_epi32(INT32_MIN);
-    const __m128i target = _mm_xor_si128(
-        _mm_set1_epi32(static_cast<int>(key)), signBit);
+int64_t FAST::Search(uint32_t key) const
+{
+    if (size_ == 0)
+    {
+        return -1;
+    }
 
-    size_t child = 0;
-    for (size_t i = 0; i < Fanout; i += 4) {
-        // alignas(64) 때문에 16바이트 정렬된 메모리를 읽을 수 있음.
-        const __m128i values = _mm_load_si128(
-            reinterpret_cast<const __m128i*>(&node.splitKeys[i]));
-        const __m128i orderedValues = _mm_xor_si128(values, signBit);
-        const __m128i less = _mm_cmplt_epi32(orderedValues, target);
-        const int mask = _mm_movemask_ps(_mm_castsi128_ps(less));
+    const __m128i query =
+        _mm_set1_epi32(
+            static_cast<int>(
+                key ^ 0x80000000u));
 
-        if (mask == 15) {  // 네 값이 전부 key보다 작음
-            child += 4;
-            continue;
+    size_t prefix = 0;
+    size_t span = logicalLeaves_;
+
+    for (const PageLevel& level : pageLevels_)
+    {
+        if (prefix >= level.blockCount)
+        {
+            return -1;
         }
 
-        // mask의 1인 비트 개수 = key보다 작은 경계값 개수
-        for (int bit = 0; bit < 4; ++bit) {
-            child += (mask >> bit) & 1;
-        }
-        return child;
+        const uint32_t* block =
+            BlockAt(level, prefix);
+
+        const size_t first =
+            FindCacheChild(
+                block,
+                query);
+
+        const size_t second =
+            FindCacheChild(
+                block + 16 * (first + 1),
+                query);
+
+        prefix =
+            prefix * 256
+            + first * 16
+            + second;
+
+        span /= 256;
     }
-    return child;
+
+    const size_t start =
+        prefix * span;
+
+    if (start >= size_)
+    {
+        return -1;
+    }
+
+    const size_t end =
+        start + std::min(
+            span,
+            size_ - start);
+
+    const uint32_t* found =
+        std::lower_bound(
+            data_ + start,
+            data_ + end,
+            key);
+
+    if (found == data_ + end || *found != key)
+    {
+        return -1;
+    }
+
+    return static_cast<int64_t>(
+        found - data_);
 }
 
-int64_t FAST::Search(uint32_t key) const {
-    if (size_ == 0) return -1;
+size_t FAST::GetMemoryUsage() const
+{
+    size_t bytes =
+        sizeof(*this)
+        + pageLevels_.capacity() * sizeof(PageLevel);
 
-    size_t index = 0;
-
-    // 루트부터 내려가며 검색할 리프 구간을 결정
-    for (size_t l = levels_.size(); l > 0; --l) {
-        const Node& node = levels_[l - 1][index];
-        size_t child = FindChild(node, key);
-        index = index * Fanout + child;
+    for (const PageLevel& level : pageLevels_)
+    {
+        bytes += level.storageBytes;
     }
 
-    // 선택한 리프(최대 256개)에서 정확한 위치를 찾음
-    const uint32_t* first = data_ + index * LeafCapacity;
-    const uint32_t* last = data_ + std::min((index + 1) * LeafCapacity, size_);
-    const uint32_t* found = std::lower_bound(first, last, key);
-
-    if (found == last || *found != key) return -1;
-    return static_cast<int64_t>(found - data_);
+    return bytes;
 }
 
-size_t FAST::GetMemoryUsage() const {
-    size_t bytes = sizeof(*this) + levels_.capacity() * sizeof(std::vector<Node>);
-    for (const auto& level : levels_) {
-        bytes += level.capacity() * sizeof(Node);
-    }
-    return bytes; // 인덱스 메모리만 계산. 원본 data 배열은 별도.
+std::string FAST::Name() const
+{
+    return "FAST";
 }
-
-std::string FAST::Name() const { return "FAST"; }

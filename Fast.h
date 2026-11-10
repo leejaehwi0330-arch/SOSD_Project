@@ -32,7 +32,6 @@ private:
         size_t blockCount = 0;
         size_t leafSpan = 0;
         size_t storageBytes = 0;
-
         std::unique_ptr<uint32_t[]> storage;
         uint32_t* aligned = nullptr;
     };

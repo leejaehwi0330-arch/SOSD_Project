@@ -16,6 +16,12 @@ BenchmarkResult Benchmark::Run(
     BenchmarkResult r;
 
     r.algorithm = index.Name();
+    {
+        volatile uint32_t sink = 0;
+        uint32_t acc = 0;
+        for (size_t i = 0; i < dataSize; i += 1024) acc += data[i];  // 4KB마다 1번
+        sink = acc;
+    }
 
     // Build 시간 측정
     auto buildStart =

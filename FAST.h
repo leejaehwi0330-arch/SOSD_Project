@@ -17,6 +17,9 @@ public:
     std::string Name() const override;
 
 private:
+    uint32_t minKey_ = 0;
+    uint32_t maxKey_ = 0;
+
     static constexpr size_t PageBytes = 4096;
     static constexpr size_t CacheLineBytes = 64;
     static constexpr size_t PageDepth = 8;

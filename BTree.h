@@ -22,6 +22,8 @@ public:
     std::string Name() const override;
 
 private:
+    uint32_t minKey_ = 0;
+    uint32_t maxKey_ = 0;
     static constexpr size_t LeafCapacity = 256;  // 리프 하나당 원소 수
     static constexpr size_t Fanout = 8;          // 내부 노드 하나당 자식 수
 

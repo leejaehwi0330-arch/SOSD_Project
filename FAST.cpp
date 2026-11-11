@@ -128,15 +128,15 @@ bool FAST::Build(
     // 원본 데이터는 제외하고 FAST 인덱스 메모리만 계산한다.
     size_t memoryNeeded = sizeof(*this);
 
-    size_t leaves = 1;
+    size_t leaves = LeafSpan;   // LeafSpan * 256^k >= size 인 최소값
 
-    while (leaves <= size) {
+    while (leaves < size) {
         if (leaves >
-            std::numeric_limits<size_t>::max() / 2) {
+            std::numeric_limits<size_t>::max() / 256) {
             return false;
         }
 
-        leaves *= 2;
+        leaves *= 256;
     }
 
     data_ = data;
@@ -146,7 +146,7 @@ bool FAST::Build(
 
     try {
         for (size_t span = leaves;
-            span >= (size_t(1) << PageDepth);
+            span > LeafSpan;                        
             span /= (size_t(1) << PageDepth)) {
 
             const size_t count =

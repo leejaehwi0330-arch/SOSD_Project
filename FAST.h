@@ -17,6 +17,8 @@ public:
     std::string Name() const override;
 
 private:
+    static constexpr size_t LeafSpan = 16;
+
     uint32_t minKey_ = 0;
     uint32_t maxKey_ = 0;
 

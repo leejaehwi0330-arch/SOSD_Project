@@ -7,6 +7,7 @@ bool BTree::Build(const uint32_t* data, size_t size) {
 
     data_ = data;
     size_ = size;
+    if (size > 0) { minKey_ = data[0]; maxKey_ = data[size - 1]; }
 
     // 원본 배열을 LeafCapacity개씩 끊어서 리프 노드를 만든다
     // 각 리프의 최댓값 childMax[i] = data[(i + 1) * LeafCapacity - 1]
@@ -45,6 +46,7 @@ bool BTree::Build(const uint32_t* data, size_t size) {
 }
 
 int64_t BTree::Search(uint32_t key) const {
+    if (size_ == 0 || key < minKey_ || key > maxKey_) return -1;
     size_t index = 0;
 
     // 루트에서 시작해서, 최댓값이 key 이상인 첫 번째 자식으로 탐색

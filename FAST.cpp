@@ -141,6 +141,7 @@ bool FAST::Build(
 
     data_ = data;
     size_ = size;
+    if (size > 0) { minKey_ = data[0]; maxKey_ = data[size - 1]; }
     logicalLeaves_ = leaves;
 
     try {
@@ -222,9 +223,7 @@ bool FAST::Build(
 
 int64_t FAST::Search(uint32_t key) const
 {
-    if (size_ == 0) {
-        return -1;
-    }
+    if (size_ == 0 || key < minKey_ || key > maxKey_) return -1;
 
     const __m128i query = _mm_set1_epi32(
         static_cast<int>(key ^ 0x80000000u));

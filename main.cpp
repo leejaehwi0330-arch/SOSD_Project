@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
         cout << "성공 쿼리 정확성: " << (result.successCorrect ? "통과" : "실패") << '\n';
         cout << "실패 쿼리 정확성: " << (result.failureCorrect ? "통과" : "실패") << '\n';
 
-        Benchmark::AppendCsv("benchmark_results.csv", argv[1], result);
+        Benchmark::AppendCsv("benchmark_results_1M.csv", argv[1], result);
         PrintMemoryUsage(memoryLimit);
     }
     else if (choice == 2) {
@@ -284,7 +284,7 @@ int main(int argc, char* argv[]) {
         cout << "성공 쿼리 정확성: " << (result.successCorrect ? "통과" : "실패") << '\n';
         cout << "실패 쿼리 정확성: " << (result.failureCorrect ? "통과" : "실패") << '\n';
 
-        Benchmark::AppendCsv("benchmark_results.csv", argv[1], result);
+        Benchmark::AppendCsv("benchmark_results_1M.csv", argv[1], result);
         PrintMemoryUsage(memoryLimit);
     }
 

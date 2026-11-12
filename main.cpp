@@ -220,7 +220,7 @@ int main(int argc, char* argv[]) {
         << " bytes\n";
 
     // 4. 성공 및 실패 쿼리 생성
-    constexpr size_t QueryCount = 10000;
+    constexpr size_t QueryCount = 1000000;
 
     QuerySet queries;
 
